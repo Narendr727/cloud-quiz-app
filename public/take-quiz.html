@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Attempt Quiz - AI Quiz System</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; user-select: none; }
+        .header { display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 15px 25px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #334155; }
+        .header h2 { margin: 0; color: #38bdf8; font-size: 20px; }
+        .timer { font-size: 18px; font-weight: bold; color: #f59e0b; background: #334155; padding: 6px 14px; border-radius: 6px; }
+        .warning-badge { font-size: 16px; font-weight: bold; color: #ef4444; background: #450a0a; padding: 6px 14px; border-radius: 6px; border: 1px solid #991b1b; }
+        .card { background: #1e293b; padding: 25px; border-radius: 12px; border: 1px solid #334155; max-width: 750px; margin: 0 auto; }
+        .question-title { font-size: 18px; margin-bottom: 20px; color: #f8fafc; }
+        .option-btn { width: 100%; text-align: left; padding: 14px; margin-bottom: 12px; background: #0f172a; border: 1px solid #475569; border-radius: 8px; color: white; cursor: pointer; font-size: 15px; transition: 0.2s; }
+        .option-btn:hover { border-color: #38bdf8; background: #1e293b; }
+        .option-btn.selected { border-color: #38bdf8; background: #0284c7; font-weight: bold; }
+        .submit-btn { width: 100%; padding: 14px; background: #10b981; border: none; color: white; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 20px; }
+        .submit-btn:hover { background: #059669; }
+
+        /* Result Modal */
+        .result-box { display: none; text-align: center; }
+        .score-badge { font-size: 40px; font-weight: bold; color: #38bdf8; margin: 20px 0; }
+        .btn-back { display: inline-block; padding: 10px 20px; background: #0284c7; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h2 id="quiz-title">Loading Quiz...</h2>
+    <div class="warning-badge" id="warning-count">Warnings: 0/3</div>
+    <div class="timer" id="timer">Time Left: --:--</div>
+</div>
+
+<!-- Quiz Screen -->
+<div class="card" id="quiz-container">
+    <div id="questions-wrapper"></div>
+    <button class="submit-btn" onclick="submitQuiz()">Submit Quiz</button>
+</div>
+
+<!-- Result Screen -->
+<div class="card result-box" id="result-container">
+    <h2>🎉 Quiz Completed!</h2>
+    <p>Your Final Calculated Score:</p>
+    <div class="score-badge" id="score-display">0 / 0</div>
+    <div id="breakdown-text" style="color: #94a3b8; font-size: 15px;"></div>
+    <a href="student.html" class="btn-back">Back to Dashboard</a>
+</div>
+
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const quizId = urlParams.get('id');
+    let currentQuiz = null;
+    let selectedAnswers = {};
+    let timerInterval = null;
+    let tabSwitchCount = 0;
+    const MAX_WARNINGS = 3;
+
+    async function loadQuiz() {
+      if (!quizId) {
+        alert('No quiz selected!');
+        window.location.href = 'student.html';
+        return;
+      }
+
+      const res = await fetch('/api/quizzes');
+      const quizzes = await res.json();
+      currentQuiz = quizzes.find(q => q._id === quizId);
+
+      if (!currentQuiz) {
+        alert('Quiz not found!');
+        window.location.href = 'student.html';
+        return;
+      }
+
+      document.getElementById('quiz-title').innerText = currentQuiz.title;
+      startTimer(currentQuiz.createdOptions?.timeLimit || 10);
+      renderQuestions();
+      setupAntiCheating();
+    }
+
+    function setupAntiCheating() {
+      // Disable Right Click & Copy
+      document.addEventListener('contextmenu', e => e.preventDefault());
+      document.addEventListener('copy', e => e.preventDefault());
+
+      // Tab Switch Detection
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          tabSwitchCount++;
+          document.getElementById('warning-count').innerText = `Warnings: ${tabSwitchCount}/${MAX_WARNINGS}`;
+
+          if (tabSwitchCount >= MAX_WARNINGS) {
+            alert('⚠️ You exceeded the maximum allowed tab switches! Submitting your quiz automatically.');
+            submitQuiz();
+          } else {
+            alert(`⚠️ WARNING ${tabSwitchCount}/${MAX_WARNINGS}: You switched tabs or minimized the browser! Cheating is strictly prohibited.`);
+          }
+        }
+      });
+    }
+
+    function startTimer(minutes) {
+      let seconds = minutes * 60;
+      const timerEl = document.getElementById('timer');
+
+      timerInterval = setInterval(() => {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        timerEl.innerText = `Time Left: ${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+
+        if (--seconds < 0) {
+          clearInterval(timerInterval);
+          alert('Time is up! Submitting automatically.');
+          submitQuiz();
+        }
+      }, 1000);
+    }
+
+    function renderQuestions() {
+      const wrapper = document.getElementById('questions-wrapper');
+      wrapper.innerHTML = currentQuiz.questions.map((q, qIdx) => `
+        <div style="margin-bottom: 25px;">
+          <div class="question-title"><b>Q${qIdx + 1}.</b> ${q.questionText}</div>
+          ${q.options.map((opt, oIdx) => `
+            <button class="option-btn" id="opt-${qIdx}-${oIdx}" onclick="selectOption(${qIdx},${oIdx})">
+              ${String.fromCharCode(65 + oIdx)}.${opt}
+            </button>
+          `).join('')}
+        </div>
+      `).join('');
+    }
+
+    function selectOption(qIdx, oIdx) {
+      selectedAnswers[qIdx] = oIdx;
+      const totalOptions = currentQuiz.questions[qIdx].options.length;
+      for (let i = 0; i < totalOptions; i++) {
+        const btn = document.getElementById(`opt-${qIdx}-${i}`);
+        if (i === oIdx) btn.classList.add('selected');
+        else btn.classList.remove('selected');
+      }
+    }
+
+    async function submitQuiz() {
+      clearInterval(timerInterval);
+
+      let correctCount = 0;
+      let wrongCount = 0;
+      const negMark = currentQuiz.createdOptions?.negativeMarking || 0;
+
+      currentQuiz.questions.forEach((q, idx) => {
+        if (selectedAnswers[idx] !== undefined) {
+          if (selectedAnswers[idx] === q.correctOption) {
+            correctCount++;
+          } else {
+            wrongCount++;
+          }
+        }
+      });
+
+      const totalScore = (correctCount * 1) - (wrongCount * negMark);
+      const maxScore = currentQuiz.questions.length;
+
+      // Get user details from localStorage
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+      // Send result to Backend API for Leaderboard
+      try {
+        await fetch('/api/results/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studentName: user.name || 'Student',
+            quizTitle: currentQuiz.title,
+            score: totalScore,
+            maxScore: maxScore,
+            correct: correctCount,
+            wrong: wrongCount,
+            tabSwitches: tabSwitchCount
+          })
+        });
+      } catch (err) {
+        console.error('Failed to submit score to leaderboard');
+      }
+
+      document.getElementById('quiz-container').style.display = 'none';
+      document.getElementById('result-container').style.display = 'block';
+      document.getElementById('score-display').innerText = `${totalScore.toFixed(2)} / ${maxScore}`;
+      document.getElementById('breakdown-text').innerHTML = `
+        Correct: <b style="color: #10b981;">${correctCount}</b> |
+        Wrong: <b style="color: #ef4444;">${wrongCount}</b> |
+        Tab Switch Violations: <b style="color: #ef4444;">${tabSwitchCount}</b>
+      `;
+    }
+
+    loadQuiz();
+</script>
+</body>
+</html>

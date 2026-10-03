@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Portal | Galgotias LMS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f4f6f9; font-family: 'Segoe UI', sans-serif; }
+        .nav-bar { background-color: #ffffff; border-bottom: 2px solid #b82332; padding: 14px 25px; }
+        .course-card {
+          background: #ffffff;
+          border-radius: 12px;
+          border: 1px solid #e1e5eb;
+          cursor: pointer;
+          overflow: hidden;
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .course-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+          border-color: #b82332;
+        }
+        .card-banner { height: 110px; background: linear-gradient(135deg, #008080, #20b2aa); }
+        .section-item { background: white; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 12px; cursor: pointer; }
+        .section-item:hover { background-color: #f8f9fa; }
+        .btn-gu { background-color: #b82332; color: white; border: none; }
+        .btn-gu:hover { background-color: #961b28; color: white; }
+        .status-badge-attempted { color: #198754; font-weight: bold; }
+        .status-badge-unattempted { color: #dc3545; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="nav-bar d-flex justify-content-between align-items-center shadow-sm">
+    <h4 class="m-0 fw-bold text-dark">Student Portal</h4>
+    <div class="d-flex align-items-center gap-3">
+        <span class="fw-bold" style="color: #b82332;" id="studentNameDisplay">Student: Loading...</span>
+        <button class="btn btn-outline-danger btn-sm" onclick="logout()">Logout</button>
+    </div>
+</div>
+
+<div class="container my-4">
+
+    <div id="studentCoursesView">
+        <h4 class="fw-bold mb-1 text-dark">My Courses</h4>
+        <p class="text-muted mb-4">Select a course to view active section quizzes</p>
+        <div class="row g-4" id="studentCoursesContainer"></div>
+    </div>
+
+    <div id="studentCourseDetailView" style="display: none;">
+        <button class="btn btn-secondary btn-sm mb-3" onclick="showCoursesView()">← Back to Courses</button>
+        <h3 id="studentCourseTitle" class="fw-bold text-dark mb-3">Course Title</h3>
+
+        <h5 class="text-secondary mb-3">Available Sections</h5>
+        <div id="studentSectionsContainer"></div>
+    </div>
+
+    <div id="examPortalView" style="display: none;">
+        <div class="card p-4 shadow-sm border-0">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 id="examTopic" class="fw-bold m-0" style="color: #b82332;">Quiz Exam</h4>
+                <span id="examTimer" class="badge bg-warning text-dark fs-6">Duration: Active</span>
+            </div>
+
+            <div id="singleQuestionContainer" class="border p-4 rounded mb-3 bg-light">
+                <h5 id="questionText" class="fw-bold mb-3">Question Text</h5>
+                <div id="optionsGroup"></div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center">
+                <button id="prevBtn" class="btn btn-secondary fw-bold" onclick="prevQuestion()" style="display:none;">Previous</button>
+                <button id="nextBtn" class="btn btn-gu fw-bold ms-auto" onclick="nextQuestion()">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="reviewPortalView" style="display: none;">
+        <div class="card p-4 shadow-sm border-0">
+            <h4 class="fw-bold mb-3 text-dark">Examination Summary & Review</h4>
+            <p class="text-muted mb-3">Check if all questions have been answered before submitting:</p>
+            <div id="reviewList" class="mb-4"></div>
+
+            <button id="finalSubmitBtn" class="btn btn-success fw-bold w-100 py-2" onclick="submitExam()" disabled>
+                Please Attempt All Questions First
+            </button>
+        </div>
+    </div>
+
+    <div id="resultView" style="display: none;">
+        <div class="card p-4 text-center shadow-sm mx-auto" style="max-width: 450px;">
+            <h3 class="text-success fw-bold mb-3">Exam Completed!</h3>
+            <h2 id="finalScoreDisplay" class="fw-bold my-2">Score: 0 / 10</h2>
+            <p id="detailedStats" class="text-muted">Correct: 0 | Wrong: 0</p>
+            <button class="btn btn-gu fw-bold mt-3" onclick="showCoursesView()">Back to Dashboard</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const user = JSON.parse(localStorage.getItem('lms_user')) || { name: 'Student', role: 'student' };
+    document.getElementById('studentNameDisplay').innerText = `Student: ${user.name}`;
+
+    let currentCourse = null;
+    let currentSection = null;
+    let currentQIdx = 0;
+    let studentAnswers = {};
+
+    function getCourses() {
+      return JSON.parse(localStorage.getItem('lms_courses')) || [];
+    }
+
+    function renderStudentCourses() {
+      const courses = getCourses();
+      const container = document.getElementById('studentCoursesContainer');
+      container.innerHTML = '';
+
+      if (courses.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No courses available.</div>';
+        return;
+      }
+
+      courses.forEach(c => {
+        container.innerHTML += `
+          <div class="col-md-4">
+            <div class="course-card" onclick="openStudentCourse('${c.id}')">
+              <div class="card-banner p-3 text-white d-flex align-items-end">
+                <span class="badge bg-light text-dark fw-bold">${c.title.split(' ')[0]}</span>
+              </div>
+              <div class="p-3">
+                <h6 class="fw-bold m-0" style="color: #b82332;">${c.title}</h6>
+                <small class="text-muted d-block mt-2">Click to view quiz sections</small>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function openStudentCourse(courseId) {
+      const courses = getCourses();
+      currentCourse = courses.find(c => c.id === courseId);
+      document.getElementById('studentCourseTitle').innerText = currentCourse.title;
+
+      const container = document.getElementById('studentSectionsContainer');
+      container.innerHTML = '';
+
+      const attempts = JSON.parse(localStorage.getItem('completed_student_quizzes')) || [];
+
+      if (!currentCourse.sections || currentCourse.sections.length === 0) {
+        container.innerHTML = '<div class="alert alert-warning">No sections active in this course.</div>';
+      } else {
+        currentCourse.sections.forEach(s => {
+          let statusBadge = '<span class="badge bg-secondary">No Quiz Set</span>';
+          const attemptKey = `${user.email || user.name}_${s.id}`;
+          const isAlreadySubmitted = attempts.includes(attemptKey);
+
+          if (isAlreadySubmitted) {
+            statusBadge = '<span class="badge bg-dark">Already Attempted</span>';
+          } else if (s.quiz) {
+            const now = new Date();
+            const start = new Date(s.quiz.startTime);
+            const end = new Date(s.quiz.endTime);
+
+            if (now < start) {
+              statusBadge = `<span class="badge bg-info text-dark">Starts at: ${start.toLocaleString()}</span>`;
+            } else if (now > end) {
+              statusBadge = '<span class="badge bg-danger">Quiz Expired</span>';
+            } else {
+              statusBadge = '<span class="badge bg-success">Take Exam Now</span>';
+            }
+          }
+
+          container.innerHTML += `
+            <div class="section-item d-flex justify-content-between align-items-center" onclick="startQuiz('${s.id}')">
+              <h6 class="m-0 fw-bold text-dark">${s.name}</h6>
+              ${statusBadge}
+            </div>
+          `;
+        });
+      }
+
+      document.getElementById('studentCoursesView').style.display = 'none';
+      document.getElementById('studentCourseDetailView').style.display = 'block';
+    }
+
+    function startQuiz(secId) {
+      currentSection = currentCourse.sections.find(s => s.id === secId);
+
+      if (!currentSection || !currentSection.quiz) {
+        return alert("No active quiz set for this section.");
+      }
+
+      const attempts = JSON.parse(localStorage.getItem('completed_student_quizzes')) || [];
+      const attemptKey = `${user.email || user.name}_${secId}`;
+      if (attempts.includes(attemptKey)) {
+        return alert("You have already submitted this exam! Multiple attempts are not allowed.");
+      }
+
+      const quiz = currentSection.quiz;
+      const now = new Date();
+      const start = new Date(quiz.startTime);
+      const end = new Date(quiz.endTime);
+
+      if (now < start) {
+        return alert(`Quiz hasn't started yet! It will begin on ${start.toLocaleString()}`);
+      }
+
+      if (now > end) {
+        return alert("Quiz time has expired! You can no longer attempt this quiz.");
+      }
+
+      document.getElementById('examTopic').innerText = `Topic: ${quiz.topic}`;
+      document.getElementById('examTimer').innerText = `Duration: ${quiz.duration} Mins`;
+
+      currentQIdx = 0;
+      studentAnswers = {};
+      renderQuestionCard();
+
+      document.getElementById('studentCourseDetailView').style.display = 'none';
+      document.getElementById('examPortalView').style.display = 'block';
+    }
+
+    function renderQuestionCard() {
+      const quiz = currentSection.quiz;
+      const q = quiz.questions[currentQIdx];
+
+      document.getElementById('questionText').innerText = `Q${currentQIdx + 1}. ${q.q}`;
+
+      const optionsGroup = document.getElementById('optionsGroup');
+      optionsGroup.innerHTML = '';
+
+      const opts = [
+        { key: 'A', val: q.a },
+        { key: 'B', val: q.b },
+        { key: 'C', val: q.c },
+        { key: 'D', val: q.d }
+      ];
+
+      opts.forEach(o => {
+        const checked = studentAnswers[currentQIdx] === o.key ? 'checked' : '';
+        optionsGroup.innerHTML += `
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="radio" name="currentQuestionOpt" id="opt_${o.key}" value="${o.key}" ${checked} onchange="saveAnswer('${o.key}')">
+            <label class="form-check-label fw-semibold" for="opt_${o.key}">${o.val}</label>
+          </div>
+        `;
+      });
+
+      document.getElementById('prevBtn').style.display = currentQIdx > 0 ? 'inline-block' : 'none';
+
+      if (currentQIdx === quiz.questions.length - 1) {
+        document.getElementById('nextBtn').innerText = 'Review & Next';
+      } else {
+        document.getElementById('nextBtn').innerText = 'Next';
+      }
+    }
+
+    function saveAnswer(optKey) {
+      studentAnswers[currentQIdx] = optKey;
+    }
+
+    function nextQuestion() {
+      const quiz = currentSection.quiz;
+      if (currentQIdx < quiz.questions.length - 1) {
+        currentQIdx++;
+        renderQuestionCard();
+      } else {
+        showReviewScreen();
+      }
+    }
+
+    function prevQuestion() {
+      if (currentQIdx > 0) {
+        currentQIdx--;
+        renderQuestionCard();
+      }
+    }
+
+    function jumpToQuestion(idx) {
+      currentQIdx = idx;
+      document.getElementById('reviewPortalView').style.display = 'none';
+      document.getElementById('examPortalView').style.display = 'block';
+      renderQuestionCard();
+    }
+
+    function showReviewScreen() {
+      document.getElementById('examPortalView').style.display = 'none';
+      document.getElementById('reviewPortalView').style.display = 'block';
+
+      const quiz = currentSection.quiz;
+      const reviewList = document.getElementById('reviewList');
+      reviewList.innerHTML = '';
+
+      let allAnswered = true;
+
+      quiz.questions.forEach((q, idx) => {
+        const isAttempted = studentAnswers[idx] !== undefined && studentAnswers[idx] !== null;
+        if (!isAttempted) allAnswered = false;
+
+        reviewList.innerHTML += `
+          <div class="d-flex justify-content-between align-items-center p-3 mb-2 border rounded bg-light">
+            <div>
+              <span class="fw-bold me-2">Question ${idx + 1}:</span>
+              <span class="${isAttempted ? 'status-badge-attempted' : 'status-badge-unattempted'}">
+                ${isAttempted ? 'Attempted' : 'No Attempt'}
+              </span>
+            </div>
+            <button class="btn btn-sm btn-outline-primary fw-bold" onclick="jumpToQuestion(${idx})">
+              Go to Question ${idx + 1}
+            </button>
+          </div>
+        `;
+      });
+
+      const btn = document.getElementById('finalSubmitBtn');
+      if (allAnswered) {
+        btn.disabled = false;
+        btn.innerText = 'Final Submit Exam';
+      } else {
+        btn.disabled = true;
+        btn.innerText = 'Please Attempt All Questions First';
+      }
+    }
+
+    function submitExam() {
+      const quiz = currentSection.quiz;
+      let correct = 0;
+
+      quiz.questions.forEach((q, idx) => {
+        if (studentAnswers[idx] === q.ans) {
+          correct++;
+        }
+      });
+
+      const total = quiz.questions.length;
+      const wrong = total - correct;
+      const score = Math.round((correct / total) * 10);
+
+      const attempts = JSON.parse(localStorage.getItem('completed_student_quizzes')) || [];
+      const attemptKey = `${user.email || user.name}_${currentSection.id}`;
+      attempts.push(attemptKey);
+      localStorage.setItem('completed_student_quizzes', JSON.stringify(attempts));
+
+      const results = JSON.parse(localStorage.getItem('lms_quiz_results')) || [];
+      results.push({
+        studentName: user.name,
+        sectionName: currentSection.name,
+        correct,
+        total,
+        score
+      });
+      localStorage.setItem('lms_quiz_results', JSON.stringify(results));
+
+      document.getElementById('finalScoreDisplay').innerText = `Score: ${score} / 10`;
+      document.getElementById('detailedStats').innerText = `Correct Answers: ${correct} | Wrong Answers: ${wrong} (Total Questions: ${total})`;
+
+      document.getElementById('reviewPortalView').style.display = 'none';
+      document.getElementById('resultView').style.display = 'block';
+    }
+
+    function showCoursesView() {
+      document.getElementById('studentCourseDetailView').style.display = 'none';
+      document.getElementById('examPortalView').style.display = 'none';
+      document.getElementById('reviewPortalView').style.display = 'none';
+      document.getElementById('resultView').style.display = 'none';
+      document.getElementById('studentCoursesView').style.display = 'block';
+      renderStudentCourses();
+    }
+
+    function logout() {
+      localStorage.removeItem('lms_user');
+      location.href = 'index.html';
+    }
+
+    renderStudentCourses();
+</script>
+</body>
+</html>

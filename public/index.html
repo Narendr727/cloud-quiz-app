@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LMS | Galgotias University</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+          background: linear-gradient(rgba(0,0,0,0.45), rgba(0,0,0,0.45)), url('https://gulms.galgotiasuniversity.org/pluginfile.php/1/theme_academi/slide1image/1790073923/pica.png') no-repeat center center fixed;
+          background-size: cover;
+          font-family: 'Segoe UI', sans-serif;
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .auth-card {
+          background: #ffffff;
+          width: 100%;
+          max-width: 440px;
+          border-radius: 16px;
+          padding: 30px;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .brand-title {
+          color: #b82332;
+          font-weight: 800;
+          letter-spacing: 0.5px;
+          margin-bottom: 2px;
+        }
+        .brand-sub {
+          color: #555;
+          font-size: 13px;
+          font-weight: 600;
+          margin-bottom: 20px;
+        }
+        .tab-btn {
+          border: none;
+          background: #f1f3f5;
+          color: #333;
+          padding: 10px;
+          border-radius: 8px;
+          font-weight: 700;
+          width: 48%;
+          transition: 0.2s;
+        }
+        .tab-btn.active {
+          background: #b82332;
+          color: #fff;
+        }
+        .btn-gu {
+          background-color: #b82332;
+          color: #ffffff;
+          font-weight: 700;
+          border: none;
+          padding: 12px;
+          border-radius: 8px;
+        }
+        .btn-gu:hover {
+          background-color: #961b28;
+          color: #ffffff;
+        }
+        .form-label {
+          font-size: 13px;
+          font-weight: 700;
+          color: #333;
+          margin-bottom: 5px;
+        }
+        .form-control, .form-select {
+          border-radius: 8px;
+          padding: 10px 12px;
+          font-size: 14px;
+        }
+        .alert-message {
+          font-size: 13px;
+          margin-top: 10px;
+          display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="auth-card">
+    <div class="text-center">
+        <h4 class="brand-title">GALGOTIAS UNIVERSITY</h4>
+        <p class="brand-sub">Learning Management & Quiz Portal</p>
+    </div>
+
+    <div class="d-flex justify-content-between mb-4">
+        <button id="tabRegister" class="tab-btn active" onclick="switchTab('register')">Register</button>
+        <button id="tabLogin" class="tab-btn" onclick="switchTab('login')">Login</button>
+    </div>
+
+    <div id="alertBox" class="alert alert-danger alert-message" role="alert"></div>
+
+    <form id="authForm">
+        <div class="mb-3">
+            <label class="form-label">Select Role</label>
+            <select id="userRole" class="form-select" required>
+                <option value="student">Student</option>
+                <option value="faculty">Faculty</option>
+            </select>
+        </div>
+
+        <div class="mb-3" id="fullNameGroup">
+            <label class="form-label">Full Name</label>
+            <input type="text" id="userName" class="form-control" placeholder="Enter Full Name" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Email Address</label>
+            <input type="email" id="userEmail" class="form-control" placeholder="name@galgotiasuniversity.edu.in" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Password</label>
+            <input type="password" id="userPassword" class="form-control" placeholder="Enter password" required>
+        </div>
+
+        <button type="submit" id="submitBtn" class="btn btn-gu w-100 mt-2">CREATE ACCOUNT</button>
+    </form>
+</div>
+
+<script>
+    let currentMode = 'register';
+
+    function showAlert(msg) {
+      const alertBox = document.getElementById('alertBox');
+      alertBox.innerText = msg;
+      alertBox.style.display = 'block';
+    }
+
+    function hideAlert() {
+      const alertBox = document.getElementById('alertBox');
+      alertBox.style.display = 'none';
+    }
+
+    function switchTab(mode) {
+      currentMode = mode;
+      hideAlert();
+      const tabReg = document.getElementById('tabRegister');
+      const tabLog = document.getElementById('tabLogin');
+      const nameGroup = document.getElementById('fullNameGroup');
+      const submitBtn = document.getElementById('submitBtn');
+
+      if (mode === 'register') {
+        tabReg.classList.add('active');
+        tabLog.classList.remove('active');
+        nameGroup.style.display = 'block';
+        document.getElementById('userName').setAttribute('required', 'true');
+        submitBtn.innerText = 'CREATE ACCOUNT';
+      } else {
+        tabLog.classList.add('active');
+        tabReg.classList.remove('active');
+        nameGroup.style.display = 'none';
+        document.getElementById('userName').removeAttribute('required');
+        submitBtn.innerText = 'LOGIN';
+      }
+    }
+
+    document.getElementById('authForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      hideAlert();
+
+      const role = document.getElementById('userRole').value;
+      const email = document.getElementById('userEmail').value.trim().toLowerCase();
+      const password = document.getElementById('userPassword').value;
+
+      let users = JSON.parse(localStorage.getItem('lms_registered_users') || '[]');
+
+      if (currentMode === 'register') {
+        const name = document.getElementById('userName').value.trim();
+
+        if (!name) {
+          showAlert('Please enter your full name.');
+          return;
+        }
+
+        const existingUser = users.find(u => u.email === email);
+        if (existingUser) {
+          showAlert('Account already exists with this email. Please Login.');
+          return;
+        }
+
+        const newUser = { name, email, password, role };
+        users.push(newUser);
+        localStorage.setItem('lms_registered_users', JSON.stringify(users));
+
+        localStorage.setItem('lms_user', JSON.stringify({ name, role, email }));
+
+        if (role === 'faculty') {
+          window.location.href = 'faculty.html';
+        } else {
+          window.location.href = 'student.html';
+        }
+
+      } else {
+        const foundUser = users.find(u => u.email === email && u.password === password && u.role === role);
+
+        if (!foundUser) {
+          showAlert('Invalid Credentials or Role selected!');
+          return;
+        }
+
+        localStorage.setItem('lms_user', JSON.stringify({ name: foundUser.name, role: foundUser.role, email: foundUser.email }));
+
+        if (foundUser.role === 'faculty') {
+          window.location.href = 'faculty.html';
+        } else {
+          window.location.href = 'student.html';
+        }
+      }
+    });
+</script>
+</body>
+</html>
